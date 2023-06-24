@@ -6,6 +6,10 @@ import cpu { CPU }
 import debugger { Debugger }
 import joypad { Joypad }
 
+struct Stats {
+    frame_time: u64
+}
+
 fn main(args: [String]) -> c_int {
     guard args.size() > 1 else {
         eprintln("usage: jakt_nes <rom file>")
@@ -36,6 +40,7 @@ fn main(args: [String]) -> c_int {
             mut clock_pause: bool = false
             mut one_frame: bool = false
             mut slow_mode: bool = false
+            mut stats: Stats = Stats(frame_time: 0u64)
             eprintln("Debugging keys\n--------------")
             eprintln("D - hold to dump current CPU info\nH - toggle CPU halt\nJ - When halted, run single frame\nL - toggle slow mode")
 
@@ -48,11 +53,10 @@ fn main(args: [String]) -> c_int {
             sdl.enable_audio()
             sdl.get_controller()
 
-            sdl_ttf.init(font_file: "VT323-Regular.ttf", font_size: 40)
-
-            sdl_ttf.text = "WHF!"
+            sdl_ttf.init(font_file: "VT323-Regular.ttf", font_size: 24)
+            sdl_ttf.text = format("FT: {}", stats.frame_time)
             sdl.text_surface = sdl_ttf.render_text_to_surface()
-            sdl_ttf.set_outline(outline: 2)
+            sdl_ttf.set_outline(outline: 1)
             sdl_ttf.render_method = RenderMethod::Blended
             sdl_ttf.fore_color = SDL_Color(0,0,0,0)
             sdl.outline_surface = sdl_ttf.render_text_to_surface()
@@ -204,20 +208,27 @@ fn main(args: [String]) -> c_int {
                 event = None
 
                 if one_frame {
-                    if clocktick(system, cpu, debugger, sdl) {
+                    if clocktick(system, cpu, debugger, sdl, &mut stats) {
                         event = sdl.poll_event()
                     }
                     one_frame = false
                 }
                 if slow_mode and not clock_pause {
-                    if clocktick(system, cpu, debugger, sdl) {
+                    if clocktick(system, cpu, debugger, sdl, &mut stats) {
                         event = sdl.poll_event()
                     }
                     sdl.delay(1u32)
                 }
                 if not clock_pause and not slow_mode {
-                    if clocktick(system, cpu, debugger, sdl) {
+                    if clocktick(system, cpu, debugger, sdl, &mut stats) {
                         event = sdl.poll_event()
+                        sdl_ttf.text = format("FT: {}", stats.frame_time)
+                        sdl_ttf.fore_color = SDL_Color(255,255,255,0)
+                        sdl_ttf.set_outline(outline: 0)
+                        sdl.text_surface = sdl_ttf.render_text_to_surface()
+                        sdl_ttf.set_outline(outline: 1)
+                        sdl_ttf.fore_color = SDL_Color(0,0,0,0)
+                        sdl.outline_surface = sdl_ttf.render_text_to_surface()
                     }
                 } else {
                     event = sdl.poll_event()
@@ -233,7 +244,7 @@ fn main(args: [String]) -> c_int {
     return 0
 }
 
-fn clocktick(mut system: System, mut cpu: CPU, mut debugger: Debugger, mut sdl: SDL) throws -> bool {
+fn clocktick(mut system: System, mut cpu: CPU, mut debugger: Debugger, mut sdl: SDL, stats: &mut Stats) throws -> bool {
     let in_vblank_before = system.ppu.in_vblank
     mut next_frame = false
 
@@ -261,6 +272,7 @@ fn clocktick(mut system: System, mut cpu: CPU, mut debugger: Debugger, mut sdl: 
         // Finally, let's burn some time so that we're at 60fps
         let delta = sdl.delta_time()
         let ms_per_frame = 1000u64 / 60u64
+        stats.frame_time = delta
 
         if delta < ms_per_frame {
             sdl.delay(ms: (ms_per_frame - delta) as! u32)

@@ -56,13 +56,6 @@ enum Hinting: i32 {
     Light_Subpixel = 4
 }
 
-struct Scene {
-    caption: raw SDL_Texture
-    caption_rect: SDL_Rect
-    message: raw SDL_Texture
-    message_rect: SDL_Rect
-}
-
 class SDL_ttf {
     public text: String
     private font: raw TTF_Font
