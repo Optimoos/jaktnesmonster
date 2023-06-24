@@ -8,6 +8,7 @@ project(
 
 find_package(Jakt CONFIG REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2_ttf CONFIG REQUIRED)
 
 add_jakt_executable(jakt_nes
     MAIN_SOURCE src/main.jakt
@@ -21,7 +22,13 @@ add_jakt_executable(jakt_nes
         src/sdl.jakt
         src/system.jakt
         src/video.jakt
+        src/sdl_ttf.jakt
 )
 
 target_compile_definitions(jakt_nes PRIVATE SDL_MAIN_HANDLED)
-target_link_libraries(jakt_nes PRIVATE SDL2::SDL2)
+
+target_link_libraries(jakt_nes PRIVATE 
+    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
+    $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    $<IF:$<TARGET_EXISTS:SDL2_ttf::SDL2_ttf>,SDL2_ttf::SDL2_ttf,SDL2_ttf::SDL2_ttf-static>
+)

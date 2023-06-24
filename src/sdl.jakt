@@ -4,16 +4,80 @@ import extern c "SDL.h" {
     extern struct SDL_AudioDeviceID {}
     extern struct SDL_AudioSpec {}
     extern struct SDL_Texture {}
-    extern struct SDL_Rect {}
+    extern struct SDL_Rect {
+        public fn SDL_Rect(anon x: i32, anon y: i32, anon w: i32, anon h: i32) -> SDL_Rect
+    }
+    extern enum SDL_PixelType : u32 {
+        SDL_PIXELTYPE_UNKNOWN,
+        SDL_PIXELTYPE_INDEX1,
+        SDL_PIXELTYPE_INDEX4,
+        SDL_PIXELTYPE_INDEX8,
+        SDL_PIXELTYPE_PACKED8,
+        SDL_PIXELTYPE_PACKED16,
+        SDL_PIXELTYPE_PACKED32,
+        SDL_PIXELTYPE_ARRAYU8,
+        SDL_PIXELTYPE_ARRAYU16,
+        SDL_PIXELTYPE_ARRAYU32,
+        SDL_PIXELTYPE_ARRAYF16,
+        SDL_PIXELTYPE_ARRAYF32
+    }
+    extern enum SDL_BitmapOrder : u32 {
+        SDL_BITMAPORDER_NONE,
+        SDL_BITMAPORDER_4321,
+        SDL_BITMAPORDER_1234
+    }
+    extern enum SDL_PackedOrder : u32 {
+        SDL_PACKEDORDER_NONE,
+        SDL_PACKEDORDER_XRGB,
+        SDL_PACKEDORDER_RGBX,
+        SDL_PACKEDORDER_ARGB,
+        SDL_PACKEDORDER_RGBA,
+        SDL_PACKEDORDER_XBGR,
+        SDL_PACKEDORDER_BGRX,
+        SDL_PACKEDORDER_ABGR,
+        SDL_PACKEDORDER_BGRA
+    }
+    extern enum SDL_ArrayOrder : u32 {
+        SDL_ARRAYORDER_NONE,
+        SDL_ARRAYORDER_RGB,
+        SDL_ARRAYORDER_BGR,
+    }
+    extern enum SDL_PackedLayout : u32 {
+        SDL_PACKEDLAYOUT_NONE,
+        SDL_PACKEDLAYOUT_332,
+        SDL_PACKEDLAYOUT_4444,
+        SDL_PACKEDLAYOUT_1555,
+        SDL_PACKEDLAYOUT_5551,
+        SDL_PACKEDLAYOUT_565,
+        SDL_PACKEDLAYOUT_8888,
+        SDL_PACKEDLAYOUT_2101010,
+        SDL_PACKEDLAYOUT_1010102
+    } 
+    extern enum SDL_BlendMode : u32 {
+        SDL_BLENDMODE_NONE = 0x00000000,     // < no blending dstRGBA = srcRGBA
+        SDL_BLENDMODE_BLEND = 0x00000001,    // < alpha blending
+                                            //   dstRGB = (srcRGB * srcA) + (dstRGB * (1-srcA))
+                                            //   dstA = srcA + (dstA * (1-srcA)) */
+        SDL_BLENDMODE_ADD = 0x00000002,      // < additive blending
+                                            //   dstRGB = (srcRGB * srcA) + dstRGB
+                                            //   dstA = dstA 
+        SDL_BLENDMODE_MOD = 0x00000004,      // < color modulate
+                                            //   dstRGB = srcRGB * dstRGB
+                                            //   dstA = dstA 
+        SDL_BLENDMODE_MUL = 0x00000008,      // < color multiply
+                                            //   dstRGB = (srcRGB * dstRGB) + (dstRGB * (1-srcA))
+                                            //   dstA = dstA */
+        SDL_BLENDMODE_INVALID = 0x7FFFFFFF
+}
+
     extern struct SDL_PixelFormat {
-        BitsPerPixel: u8
-        Rmask: u32
-        Gmask: u32
-        Bmask: u32
-        Amask: u32
+        public fn SDL_PixelFormat(anon type: i32, anon order: i32, anon layout: i32, anon bpp: i32, anon depth: i32) -> raw SDL_PixelFormat
+    }
+    extern struct SDL_Color {
+        public fn SDL_Color(anon r: u8, anon g: u8, anon b: u8, anon a: u8) -> SDL_Color
     }
     extern struct SDL_Surface {
-        format: raw SDL_PixelFormat
+        public fn SDL_Surface(anon surface: raw SDL_Surface) -> raw SDL_Surface
     }
     extern struct SDL_GameController {}
 
@@ -46,6 +110,7 @@ import extern c "SDL.h" {
     extern fn SDL_UpdateWindowSurface(window: raw SDL_Window) -> c_int
     extern fn SDL_CreateRGBSurfaceFrom(pixels: raw void, width: c_int, height: c_int, depth: c_int, pitch: c_int, Rmask: u32, Gmask: u32, Bmask: u32, Amask: u32) -> raw SDL_Surface
     extern fn SDL_BlitScaled(source: raw SDL_Surface, srcrect: raw SDL_Rect, dest: raw SDL_Surface, destrect: raw SDL_Rect) -> c_int
+    extern fn SDL_BlitSurface(source: raw SDL_Surface, srcrect: raw SDL_Rect, dest: raw SDL_Surface, destrect: raw SDL_Rect) -> c_int
     extern fn SDL_GetTicks64() -> u64
     extern fn SDL_NumJoysticks() -> c_int
     extern fn SDL_IsGameController(index: c_int) -> bool
@@ -54,6 +119,13 @@ import extern c "SDL.h" {
     extern fn SDL_GetError() -> raw c_char
     extern fn SDL_GameControllerEventState(state: c_int) -> c_int
     extern fn SDL_RenderSetVSync(mut renderer: raw SDL_Renderer, vsync: c_int) -> c_int
+    extern fn SDL_CreateTextureFromSurface(mut renderer: raw SDL_Renderer, mut surface: raw SDL_Surface) -> raw SDL_Texture
+    extern fn SDL_CreateRenderer(mut window: raw SDL_Window, renderer_name: raw c_char, flags: u32) -> raw SDL_Renderer
+    extern fn SDL_SetSurfaceBlendMode(surface: raw SDL_Surface, blend_mode: SDL_BlendMode) -> i32
+    extern fn SDL_ConvertSurface(source: raw SDL_Surface, pixel_format: raw SDL_PixelFormat, flags: u32) -> raw SDL_Surface
+    extern fn SDL_ConvertSurfaceFormat(source: raw SDL_Surface, pixel_format: u32, flags: u32) -> raw SDL_Surface
+    extern fn SDL_GetPixelFormatName(format: u32) -> raw c_char
+    extern fn SDL_FreeSurface(surface: raw SDL_Surface)
 }
 
 enum Key {
@@ -100,19 +172,36 @@ fn null<T>() -> raw T {
     abort()
 }
 
+fn bitcast<T, U>(anon x: U) -> T {
+    let impl = fn[&x](anon ptr: &mut raw T) -> T {
+        unsafe {
+            cpp {
+                "return bit_cast<RemoveReference<decltype(*ptr)>>(x);"
+            }
+        }
+        abort()
+    }
+
+    mut ptr = null<T>()
+    return impl(&mut ptr)
+}
+
 class SDL {
     // renderer: raw SDL_Renderer
     window: raw SDL_Window
     audio_device: u32
     public surface: raw SDL_Surface
+    public text_surface: raw SDL_Surface
+    public outline_surface: raw SDL_Surface
     last_frame_time: u64
     gamepad: raw SDL_GameController
 
     public fn construct() throws -> SDL {
-        return SDL(window: null<SDL_Window>(), audio_device: 0, surface: null(), last_frame_time: 0, gamepad: null<SDL_GameController>())
+        return SDL(window: null<SDL_Window>(), audio_device: 0, surface: null(), text_surface: null(), outline_surface: null(), last_frame_time: 0, gamepad: null<SDL_GameController>())
     }
 
     public fn init_video(mut this, width: i64, height: i64) {
+
         let sdl_init_flags : u32 = 0x2030 // Video, Audio, Gamecontroller
         let sdl_windowpos_undefined: c_int = 0x1FFF0000
         unsafe {
@@ -293,6 +382,9 @@ class SDL {
 
     public fn quit(this) {
         unsafe {
+            SDL_FreeSurface (surface: .outline_surface)
+            SDL_FreeSurface (surface: .text_surface)
+            SDL_FreeSurface (surface: .surface)
             SDL_DestroyWindow(window: .window)
             SDL_CloseAudioDevice(device: .audio_device)
             SDL_GameControllerClose(gamepad: .gamepad)
@@ -367,6 +459,12 @@ class SDL {
         }
     }
 
+        public fn blit_surface(this, mut source: raw SDL_Surface, mut srcrect: raw SDL_Rect, mut dest: raw SDL_Surface, mut destrect: raw SDL_Rect) -> c_int{
+        unsafe  {
+            return SDL_BlitSurface(source, srcrect, dest, destrect)
+        }
+    }
+
     public fn delta_time(mut this) -> u64 {
         mut this_frame_time = 0u64
         unsafe {
@@ -396,4 +494,58 @@ class SDL {
             }
         }
     }
+
+    public fn create_texture_from_surface(this, renderer: raw SDL_Renderer, surface: raw SDL_Surface) -> raw SDL_Texture {
+        unsafe {
+            return SDL_CreateTextureFromSurface(renderer: renderer, surface: surface)
+        }
+    }
+
+    public fn get_error(this) throws -> String {
+        mut result = StringBuilder::create()
+        unsafe {
+            result.append_c_string(SDL_GetError())
+        }
+        return result.to_string()
+    }
+
+    public fn set_surface_blend_mode(this, surface: raw SDL_Surface, blend_mode: SDL_BlendMode) -> i32 {
+        unsafe {
+            return SDL_SetSurfaceBlendMode(surface: surface, blend_mode: blend_mode)
+        }
+    }
+
+    public fn convert_surface(this, source: raw SDL_Surface, pixel_type: SDL_PixelType, pixel_order: SDL_PackedOrder, pixel_layout: SDL_PackedLayout, bits: u32, bytes: u32) -> raw SDL_Surface {
+
+        mut format: u32 = 1 << 28
+        format += pixel_type as! u32 << 24
+        format += pixel_order as! u32 << 20
+        format += pixel_layout as! u32 << 16
+        format += bits << 8
+        format += bytes
+
+        unsafe {
+            return SDL_ConvertSurfaceFormat(source: source, pixel_format: format, flags: 0) // Flags are unused but need to be set to 0
+        }
+    }
+
+    public fn get_format(this, format: u32) throws -> String {
+        mut name = StringBuilder::create()
+        unsafe {
+            name.append_c_string(SDL_GetPixelFormatName(format: format))
+        }
+        return name.to_string()
+    }
+
+    public fn free_surface(this, surface: raw SDL_Surface) {
+        unsafe {
+            SDL_FreeSurface(surface)
+        }
+    }
+
+    // public fn create_renderer(this, name: String, flags: u32) -> raw SDL_Renderer {
+    //     unsafe {
+    //         return SDL_CreateRenderer(window: .window, renderer_name: name.c_string(), flags: 0)
+    //     }
+    // }
 }

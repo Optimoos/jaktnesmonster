@@ -1,4 +1,4 @@
-import sdl { SDL,  null }
+import sdl { SDL,  null, SDL_BlendMode, SDL_Rect }
 import ppu { RGB }
 import cart { Region }
 
@@ -32,6 +32,9 @@ fn draw_frame(sdl: SDL, mut buffer: [u32], region: Region) throws {
 
     sdl.blit_scaled(source, srcrect: null(), dest: surface, destrect: null())
 
+    let text_rect = SDL_Rect(200, 200, 100,100)
+    sdl.blit_surface(source: sdl.outline_surface, srcrect: null(), dest: surface, destrect: &raw text_rect)
+    sdl.blit_surface(source: sdl.text_surface, srcrect: null(), dest: surface, destrect: &raw text_rect)
     sdl.update_window_surface()
 
 }

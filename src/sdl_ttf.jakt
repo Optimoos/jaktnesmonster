@@ -1,0 +1,206 @@
+import sdl { SDL, SDL_Color, SDL_Surface, SDL_Texture, SDL_Rect, null } 
+
+import extern c "SDL_ttf.h" {
+    extern struct TTF_Font {}
+
+    extern fn TTF_Init() -> c_int
+    extern fn TTF_Quit()
+
+    extern fn TTF_OpenFont(font_file: raw c_char, font_size: u16) -> raw TTF_Font
+    extern fn TTF_CloseFont(font: raw TTF_Font)
+
+    extern fn TTF_SetFontStyle(font: raw TTF_Font, render_style: u8)
+    extern fn TTF_SetFontOutline(font: raw TTF_Font, outline: u8)
+    extern fn TTF_SetFontKerning(font: raw TTF_Font, kerning: u8)
+    extern fn TTF_SetFontHinting(font: raw TTF_Font, hinting: i32)
+
+    extern fn TTF_RenderText_Solid(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderText_Shaded(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color, back_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderText_Blended(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+
+    extern fn TTF_RenderUTF8_Solid(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderUTF8_Shaded(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color, back_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderUTF8_Blended(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+
+    extern fn TTF_RenderUNICODE_Solid(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderUNICODE_Shaded(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color, back_color: raw SDL_Color) -> raw SDL_Surface
+    extern fn TTF_RenderUNICODE_Blended(font: raw TTF_Font, text: raw c_char, fore_color: raw SDL_Color) -> raw SDL_Surface
+
+}
+
+enum RenderType {
+    LATIN1
+    UTF8
+//    UNICODE
+}
+
+enum RenderMethod {
+    Solid
+    Shaded
+    Blended
+}
+
+enum RenderStyle: u8 {
+    Normal = 0x00
+    Bold = 0x01
+    Italic = 0x02
+    Underline = 0x04
+    Strikethrough = 0x08
+}
+
+enum Hinting: i32 {
+    Normal = 0
+    Light = 1
+    Mono = 2
+    None = 3
+    Light_Subpixel = 4
+}
+
+struct Scene {
+    caption: raw SDL_Texture
+    caption_rect: SDL_Rect
+    message: raw SDL_Texture
+    message_rect: SDL_Rect
+}
+
+class SDL_ttf {
+    public text: String
+    private font: raw TTF_Font
+    public fore_color: SDL_Color
+    public back_color: SDL_Color
+    public render_method: RenderMethod
+    public render_type: RenderType
+
+    public fn construct() throws -> SDL_ttf {
+
+        let white = SDL_Color(0xFF, 0xFF, 0xFF, 0)
+        let black = SDL_Color(0, 0, 0, 0)
+
+        return SDL_ttf(text: "", font: null<TTF_Font>() , fore_color: white, back_color: black, render_method: RenderMethod::Solid, render_type: RenderType::UTF8)
+    }
+
+    public fn init(mut this, font_file: String, font_size: u16) {
+        unsafe {
+            let result = TTF_Init()
+        }
+
+        try {.load_font(font_file: font_file, font_size: font_size)} catch error { eprintln("Error: {}", error.string())}
+        .set_render_style(RenderStyle::Normal)
+        .set_outline(0)
+        .set_kerning(1)
+        .set_hinting(Hinting::Normal)
+    }
+
+    public fn set_render_style(mut this, anon render_style: RenderStyle) {
+        unsafe {
+            TTF_SetFontStyle(font: .font, render_style: render_style as! u8)
+        }
+    }
+
+    public fn set_outline(mut this, anon outline: u8) {
+        unsafe {
+            TTF_SetFontOutline(font: .font, outline)
+        }
+    }
+
+    public fn set_kerning(mut this, anon kerning: u8) {
+        unsafe {
+            TTF_SetFontKerning(font: .font, kerning: kerning as! u8)
+        }
+    }
+
+    public fn set_hinting(mut this, anon hinting: Hinting) {
+        unsafe {
+            TTF_SetFontHinting(font: .font, hinting: hinting as! i32)
+        }
+    }
+
+    public fn load_font(mut this, mut font_file: String, font_size: u16) throws {
+        unsafe {
+            .font = TTF_OpenFont(font_file: font_file.c_string(), font_size: font_size)
+        }
+        guard .font != null<TTF_Font>() else {
+            throw Error::from_string_literal("Could not open font file")
+        }
+    }
+
+    public fn close_font(mut this) {
+        unsafe {
+            TTF_CloseFont(font: .font)
+        }
+    }
+
+    public fn render_text_to_surface(this) -> raw SDL_Surface {
+        match .render_type {
+            LATIN1 => {
+                match .render_method {
+                    Solid => {
+                        unsafe {
+                            return TTF_RenderText_Solid(font: .font, text: .text.c_string(), fore_color: .fore_color)
+                        }
+                    }
+                    Shaded => {
+                        unsafe {
+                            return TTF_RenderText_Shaded(font: .font, text: .text.c_string(), fore_color: .fore_color, back_color: .back_color)
+                        }
+                    }
+                    Blended => {
+                        unsafe {
+                            return TTF_RenderText_Blended(font: .font, text: .text.c_string(), fore_color: .fore_color)
+                        }
+                    }
+                }
+            }
+            UTF8 => {
+                match .render_method {
+                    Solid => {
+                        unsafe {
+                            return TTF_RenderUTF8_Solid(font: .font, text: .text.c_string(), fore_color: .fore_color)
+                        }
+                    }
+                    Shaded => {
+                        unsafe {
+                            return TTF_RenderUTF8_Shaded(font: .font, text: .text.c_string(), fore_color: .fore_color, back_color: .back_color)
+                        }
+                    }
+                    Blended => {
+                        unsafe {
+                            return TTF_RenderUTF8_Blended(font: .font, text: .text.c_string(), fore_color: .fore_color)
+                        }
+                    }
+                }
+            }
+            // FIXME: Unicode non-functional until I figure out how to provide u16 conversion
+            // Uncomment type from enum above as well
+            // UNICODE => {
+            //     match .render_method {
+            //         Solid => {
+            //             unsafe {
+            //                 return TTF_RenderUNICODE_Solid(font: .font, text: .text.c_string(), fore_color: .fore_color)
+            //             }
+            //         }
+            //         Shaded => {
+            //             unsafe {
+            //                 return TTF_RenderUNICODE_Shaded(font: .font, text: .text.c_string(), fore_color: .fore_color, back_color: .back_color)
+            //             }
+            //         }
+            //         Blended => {
+            //             unsafe {
+            //                 return TTF_RenderUNICODE_Blended(font: .font, text: .text.c_string(), fore_color: .fore_color)
+            //             }
+            //         }
+            //     }
+            // }
+        }
+    }
+
+    public fn quit(mut this) {
+        .close_font();
+        // SDL_DestroyTexture(scene.caption);
+        // SDL_DestroyTexture(scene.message);
+        unsafe {
+            TTF_Quit();
+        }
+    }
+
+}
