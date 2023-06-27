@@ -45,8 +45,9 @@ class OAMMemory {
     m_attribute: [u8]
     m_x_position: [u8]
     public m_sprite_zero: [bool]
+    public next_sprites: [u8]
     public fn init(anon size: u8 = 255u8) throws -> OAMMemory {
-        return OAMMemory(m_y_position:[0u8;size], m_tile_index:[0u8;size], m_attribute:[0u8;size], m_x_position:[0u8;size], m_sprite_zero: [false;size])
+        return OAMMemory(m_y_position:[0u8;size], m_tile_index:[0u8;size], m_attribute:[0u8;size], m_x_position:[0u8;size], m_sprite_zero: [false;size], next_sprites:[0])
     }
     
     public fn read(this, address: u8) -> u8 {
@@ -618,184 +619,110 @@ class PPU {
     fn render_sprite_pixel(mut this, bg_set: bool) throws {
         let horizontal_pixel = .horizontal_pixel as! u8
         let vertical_pixel = .vertical_pixel as! u8
+
         // FIXME: Implement iterator for OAMMemory
         // FIXME: Use known x values of sprites to trigger render rather than blind loops
         //for sprite in .oam_secondary {
 
         for secondary_oam_index in (0u8..7u8).inclusive() {
+            let sprite_x = .oam_secondary.x_position(address: secondary_oam_index * 4u8)
 
-            mut clamp_horizontal_pixel: u8 = .oam_secondary.x_position(address: secondary_oam_index * 4)
+            mut clamp_horizontal_pixel: u8 = sprite_x
             if clamp_horizontal_pixel > 247 {
                 clamp_horizontal_pixel = 247
             }
-            if (horizontal_pixel >= .oam_secondary.x_position(address: secondary_oam_index * 4)) and (horizontal_pixel <= (clamp_horizontal_pixel + 7) and (.oam_secondary.y_position(address: secondary_oam_index * 4) <= 240)) {
+            if (horizontal_pixel >= sprite_x) and (horizontal_pixel <= (clamp_horizontal_pixel + 7)) {
+                let sprite_y = .oam_secondary.y_position(address: secondary_oam_index * 4u8)
+                if (sprite_y > 240) {
+                    continue
+                }
+                let sprite_tile_index = .oam_secondary.tile_index(address: secondary_oam_index * 4u8)
+                let sprite_attribute = .oam_secondary.attribute(address: secondary_oam_index * 4u8)
                 // Sprite can only be output if BG pixel is zero (bg_set==false) or the sprite has foreground priority (5th bit in attributes == 0)
                 // However, we cannot filter this early as it will prevent the current sprite 0 mechanism from functioning
 
                 //eprintln("Priority - attr: {:08b}, eval: {}, index: {}, h: {}, v:{}", .oam_secondary.attribute(address: secondary_oam_index * 4), (.oam_secondary.attribute(address: secondary_oam_index * 4) & 0b00100000) != 0b00100000, secondary_oam_index, horizontal_pixel, vertical_pixel )
 
-                                                                                                                // attr: 00100011
+                // if (.oam_secondary.x_position(address: secondary_oam_index) != 255 ) { 
+                    //eprintln("Secondary oam entry: x: {}, y: {}, currently x: {}, y: {}", .oam_secondary.x_position(address: secondary_oam_index), .oam_secondary.y_position(address: secondary_oam_index), horizontal_pixel, vertical_pixel)
+                    //eprintln("Rendering sprite pixel input h: {}, v: {}, o_x: {} o_y: {}", horizontal_pixel, vertical_pixel, .oam_secondary.x_position(address: secondary_oam_index * 4), .oam_secondary.y_position(address: secondary_oam_index * 4))
 
-                //if (bg_set == false) or ((.oam_secondary.attribute(address: secondary_oam_index * 4) & 0b00100000) != 0b00100000) {
+                // }
 
-                    if (.oam_secondary.x_position(address: secondary_oam_index) != 255 ) { 
-                        //eprintln("Secondary oam entry: x: {}, y: {}, currently x: {}, y: {}", .oam_secondary.x_position(address: secondary_oam_index), .oam_secondary.y_position(address: secondary_oam_index), horizontal_pixel, vertical_pixel)
-                        //eprintln("Rendering sprite pixel input h: {}, v: {}, o_x: {} o_y: {}", horizontal_pixel, vertical_pixel, .oam_secondary.x_position(address: secondary_oam_index * 4), .oam_secondary.y_position(address: secondary_oam_index * 4))
+                // These subtractions should never be out of bounds
+                let y_difference = vertical_pixel - sprite_y
+                let x_difference = horizontal_pixel - sprite_x
 
-                    }
+                //eprintln("OAM sprite location - x: {}, y: {}, pixel count: {}", .oam_secondary.x_position(address: secondary_oam_index), .oam_secondary.y_position(address: secondary_oam_index), current_pixel_mask)
 
-                    //eprintln("Rendering sprite pixel input h: {}, v: {}", horizontal_pixel, vertical_pixel)
+                // Attribute table to find palette, character rom to get color 
+                // Each pattern table (or CHR) returns 8 bytes. Combined, these provide a 2-bit (4 option) lookup to the palette for the tile, which is selected from the frame palette by a value in the attribute
+                // Sprites lookup directly into pattern table (chr) from their tile index
+                // The pattern tables are address from $0000-$0FFF for "left" and $1000-$1FFF for "right".
+                // For 8x8 sprites, left or right is chosen from ppuctrl bit 3
+                // The address format is $<left/right><tile><row>, so a sprite using the left table doing a lookup on tile $69 and row 1
+                // would query $0691 for the first plane, and $0699 for the second plane
 
-                    // Figure out the bit we care about in the chr rom
-                    // let current_pixel_mask:u8 = ((vertical_pixel % 8) * 8) + (horizontal_pixel % 8)
-                    mut y_difference: u8 = 0
-                    if (vertical_pixel >= .oam_secondary.y_position(address: secondary_oam_index * 4)) {
-                        y_difference = vertical_pixel - .oam_secondary.y_position(address: secondary_oam_index * 4)
-                        //eprintln("Y difference: vertical_pixel: {}, oam y: {}, diff: {}", vertical_pixel,.oam_secondary.y_position(address: secondary_oam_index * 4), y_difference )
-                    }
-                    mut x_difference: u8 = 0
-                    if (horizontal_pixel >=  .oam_secondary.x_position(address: secondary_oam_index * 4)) {
-                        x_difference = horizontal_pixel - .oam_secondary.x_position(address: secondary_oam_index * 4)
-                        //eprintln("X difference: horizontal_pixel: {}, oam x: {}, diff: {}", horizontal_pixel, .oam_secondary.x_position(address: secondary_oam_index * 4), x_difference )
-                    }
+                // Given current setup of our data structures, the left/right selection isn't required
 
+                // Y difference makes sure we get the correct y bytes for the character, need to handle y flip
 
+                // Figure out the bit we care about in the chr rom
+                let sprite_index:u16 = match .oam_secondary.v_flipped(address: secondary_oam_index * 4) {
+                    true => (sprite_tile_index << 4  | 7 - (y_difference)) as! u16
+                    else => (sprite_tile_index << 4  | (y_difference)) as! u16
+                }
 
+                //eprintln("Y: {}, Sprite Y: {}, Y diff: {}, Tile index: {:04x}, flipped: {}", vertical_pixel, .oam_secondary.y_position(address: secondary_oam_index * 4), y_difference, sprite_index, .oam_secondary.v_flipped(address: secondary_oam_index))
 
-                    //eprintln("Difference: {}", current_pixel_mask)
+                let first_plane = .chr_rom_pages[.sprite_table_address][sprite_index]
+                let second_plane = .chr_rom_pages[.sprite_table_address][sprite_index + 8]
 
-                    //eprintln("OAM sprite location - x: {}, y: {}, pixel count: {}", .oam_secondary.x_position(address: secondary_oam_index), .oam_secondary.y_position(address: secondary_oam_index), current_pixel_mask)
+                //eprintln("Pattern table - first: {:08b}, second: {:08b}, x difference: {}", first_plane, second_plane, x_difference)
 
+                // Indexes into palette lookup should be formed as follows:
+                // 43210
+                // |||||
+                // |||++- Pixel value from tile data
+                // |++--- Palette number from attribute table or OAM
+                // +----- Background/Sprite select
 
-                    // TODO: This can probably be better? What is the object wide .sprite_table_address?
-                    // let sprite_base_table = match .sprite_table_address {
-                    //     0000 => .chr_rom_page_0000
-                    //     else => .chr_rom_page_1000
-                    // }
+                mut shift_amount = match .oam_secondary.h_flipped(address: secondary_oam_index * 4) {
+                    true => (x_difference)
+                    else => 7 - (x_difference)
+                }
 
-                    // Attribute table to find palette, character rom to get color 
-                    // Each pattern table (or CHR) returns 8 bytes. Combined, these provide a 2-bit (4 option) lookup to the palette for the tile, which is selected from the frame palette by a value in the attribute
+                let palette_lookup: u8 = (sprite_attribute & 0b00000011)
+                let first_plane_mask: u8 = ((first_plane >> shift_amount) & 0b00000001 )
+                let second_plane_mask: u8 = (second_plane >> shift_amount) & 0b00000001 
 
-                    //let sprite_index = (y_difference & 0x7) | ((.oam_secondary.x_position(address: secondary_oam_index * 4) & 0xf) << 4) | ((.oam_secondary.y_position(address: secondary_oam_index * 4) & 0xf) << 8)
+                // All sprites are in the second half of the palette table, organize the above values and mask with 0b00010000
+                let mask: u8 = 0b00010000 | palette_lookup << 2 |  first_plane_mask | second_plane_mask << 1
+                
+                //eprintln("Calculated masks - first {:08b} mask {:05b}, second {:08b} mask {:05b}, palette {:0b}, combined {:05b}, attr: {:08b}, diff: {}, shift: {}, x: {}, y: {}, X flip: {}", first_plane, first_plane_mask, second_plane, second_plane_mask, palette_lookup, mask, .oam_secondary.attribute(address: secondary_oam_index * 4), x_difference, shift_amount, horizontal_pixel, vertical_pixel, .oam_secondary.h_flipped(address: secondary_oam_index * 4))
 
+                // Check for transparent (zero) pixel 
+                // FIXME: Move this test earlier                   
+                if (mask & 0b11) != 0 {
+
+                    // FIXME: This is currently only accounting for 8x8 sprites
+                    //eprintln("Pattern table - first: {:08b} {:b}, second: {:08b} {:b}, x difference: {}, mask: {:08b} DID H:{} R_X:{} V:{} R_Y:{} R_LOC:{} O_X:{} O_Y:{}, {:08b}", first_plane, first_plane_mask, second_plane, second_plane_mask, x_difference, mask, horizontal_pixel, render_x, vertical_pixel, render_y, render_location, .oam_secondary.x_position(address: secondary_oam_index * 4), .oam_secondary.y_position(address: secondary_oam_index * 4), .oam_secondary.attribute(address: secondary_oam_index * 4))
+
+                    let rgb = .color_palette_to_rgb(.palette[mask])
+                    //eprintln("Rendering sprite pixel {:x} at x: {}, y: {} (combined: {})", rgb, render_x, render_y, render_location)
+
+                    if not .sprite_zero_hit and horizontal_pixel != 255 {
+                        .sprite_zero_hit = (not .sprite_zero_hit) and .oam_secondary.m_sprite_zero[secondary_oam_index]
+                        //eprintln("Sprite 0 hit: h:{} o:{} b:{}",.sprite_zero_hit, .oam_secondary.m_sprite_zero[secondary_oam_index], bg_set )
+                    } 
                     
-
-
-                    // eprintln("Old index: {}", sprite_index)
-                    // eprintln("Pattern index: {}", .oam_secondary.tile_index(address: secondary_oam_index * 4))
-
-                    // .chr_rom_pages[page][index]
-
-                    // Sprites lookup directly into pattern table (chr) from their tile index
-                    // The pattern tables are address from $0000-$0FFF for "left" and $1000-$1FFF for "right".
-                    // For 8x8 sprites, left or right is chosen from ppuctrl bit 3
-                    // The address format is $<left/right><tile><row>, so a sprite using the left table doing a lookup on tile $69 and row 1
-                    // would query $0691 for the first plane, and $0699 for the second plane
-
-                    // Given current setup of our data structures, the left/right selection isn't required
-
-
-                    // Y difference makes sure we get the correct y bytes for the character, need to handle y flip
-                    let sprite_index:u16 = match .oam_secondary.v_flipped(address: secondary_oam_index * 4) {
-                        true => (.oam_secondary.tile_index(address: secondary_oam_index * 4) << 4  | 7 - (y_difference)) as! u16
-                        else => (.oam_secondary.tile_index(address: secondary_oam_index * 4) << 4  | (y_difference)) as! u16
+                    if (bg_set == false) or ((sprite_attribute & 0b00100000) != 0b00100000) {
+                        .video_buffer[(vertical_pixel as! u32 * 256) + horizontal_pixel as! u32] = rgb 
                     }
 
-                    //eprintln("Y: {}, Sprite Y: {}, Y diff: {}, Tile index: {:04x}, flipped: {}", vertical_pixel, .oam_secondary.y_position(address: secondary_oam_index * 4), y_difference, sprite_index, .oam_secondary.v_flipped(address: secondary_oam_index))
-
-                    let first_plane = .chr_rom_pages[.sprite_table_address][sprite_index]
-                    let second_plane = .chr_rom_pages[.sprite_table_address][sprite_index + 8]
-
-                    //let first_plane = .chr_rom_byte_at(page: .sprite_table_address, index: sprite_index as! u16) // FIXME: Can the pattern table data structure be optimized?
-                    //let second_plane = .chr_rom_byte_at(page: .sprite_table_address, index: sprite_index as! u16 + 8)
-
-                    //eprintln("Pattern table - first: {:08b}, second: {:08b}, x difference: {}", first_plane, second_plane, x_difference)
-
-                    // Indexes into palette lookup should be formed as follows:
-                    // 43210
-                    // |||||
-                    // |||++- Pixel value from tile data
-                    // |++--- Palette number from attribute table or OAM
-                    // +----- Background/Sprite select
-
-
-                    mut shift_amount = match .oam_secondary.h_flipped(address: secondary_oam_index * 4) {
-                        true => (x_difference as! i16)
-                        else => 7 - (x_difference as! i16)
-                    }
-
-                    if (shift_amount < 0) {
-                        shift_amount = 0
-                    }
-
-                    let palette_lookup: u8 = (.oam_secondary.attribute(address: secondary_oam_index * 4) & 0b00000011)
-                    let first_plane_mask: u8 = ((first_plane >> shift_amount) & 0b00000001 )
-                    let second_plane_mask: u8 = (second_plane >> shift_amount) & 0b00000001 
-
-                    // All sprites are in the second half of the palette table, organize the above values and mask with 0b00010000
-                    let mask: u8 = 0b00010000 | palette_lookup << 2 |  first_plane_mask | second_plane_mask << 1
-
-                    
-                    //eprintln("Calculated masks - first {:08b} mask {:05b}, second {:08b} mask {:05b}, palette {:0b}, combined {:05b}, attr: {:08b}, diff: {}, shift: {}, x: {}, y: {}, X flip: {}", first_plane, first_plane_mask, second_plane, second_plane_mask, palette_lookup, mask, .oam_secondary.attribute(address: secondary_oam_index * 4), x_difference, shift_amount, horizontal_pixel, vertical_pixel, .oam_secondary.h_flipped(address: secondary_oam_index * 4))
-
-                    // guard x >= .sprite_x and (x as! u16) < ((.sprite_x as! u16) + 8u16) else {
-                    //     return(false, 0u8)
-                    // }
-
-                    // mut shift_amount = match .oam_secondary.h_flipped(address: secondary_oam_index) {
-                    //     true => (x_difference - .oam_secondary.x_position(address: secondary_oam_index * 4)) as! i16
-                    //     else => 7 - (x_difference as! i16 - .oam_secondary.x_position(address: secondary_oam_index * 4) as! i16)
-                    // }
-
-                    // if (shift_amount < 0) {
-                    //     shift_amount = 0
-                    // }
-
-                    //let entry = .mask[shift_amount as! u8]
-
-
-                    // let render_y:u32 = (.oam_secondary.y_position(address: secondary_oam_index * 4) + y_difference) as! u32
-                    // mut render_x:u32 = (.oam_secondary.x_position(address: secondary_oam_index * 4) as! u32) + x_difference as! u32
-                    // let render_location:u32 = (render_y * 256) + render_x
-
-
-                    // Check for transparent (zero) pixel 
-                    // FIXME: Move this test earlier                   
-                    if (mask & 0b11) != 0 {
-
-
-                        // FIXME: This is currently only accounting for 8x8 sprites
-                        //let rgb = .look_up_palette_entry(palette_entry: (mask))
-                        //eprintln("Pattern table - first: {:08b} {:b}, second: {:08b} {:b}, x difference: {}, mask: {:08b} DID H:{} R_X:{} V:{} R_Y:{} R_LOC:{} O_X:{} O_Y:{}, {:08b}", first_plane, first_plane_mask, second_plane, second_plane_mask, x_difference, mask, horizontal_pixel, render_x, vertical_pixel, render_y, render_location, .oam_secondary.x_position(address: secondary_oam_index * 4), .oam_secondary.y_position(address: secondary_oam_index * 4), .oam_secondary.attribute(address: secondary_oam_index * 4))
-
-                        // Works
-                        let rgb = .color_palette_to_rgb(.palette[mask])
-                        //eprintln("Got color for {:x}, rgb: {:08x}", mask, rgb)
-                        //let rgb = 0xffffffffu32
-                        //eprintln("Rendering sprite pixel {:x} at x: {}, y: {} (combined: {})", rgb, render_x, render_y, render_location)
-
-                        if not .sprite_zero_hit and horizontal_pixel != 255 {
-                            
-                            .sprite_zero_hit = (not .sprite_zero_hit) and .oam_secondary.m_sprite_zero[secondary_oam_index]
-                            //eprintln("Sprite 0 hit: h:{} o:{} b:{}",.sprite_zero_hit, .oam_secondary.m_sprite_zero[secondary_oam_index], bg_set )
-                        } 
-
-                        
-                        if (bg_set == false) or ((.oam_secondary.attribute(address: secondary_oam_index * 4) & 0b00100000) != 0b00100000) {
-                            .video_buffer[(vertical_pixel as! u32 * 256) + horizontal_pixel as! u32] = rgb 
-                        }
-
-                        //.solid_draws += 1
-                        //eprintln("T: {} S: {}", .transparent_draws, .solid_draws)                    
-                        // Can we get away with escaping from the loop here?
-                        // break;
-                    } else {
-                        //eprintln("Pattern table - first: {:08b} {:b}, second: {:08b} {:b}, x difference: {}, mask: {:08b} DIDN'T H:{} R_X:{} V:{} R_Y:{} O_X:{} O_Y:{}, {:08b}", first_plane, first_plane_mask, second_plane, second_plane_mask, x_difference, mask, horizontal_pixel, render_x, vertical_pixel, render_y, .oam_secondary.x_position(address: secondary_oam_index * 4), .oam_secondary.y_position(address: secondary_oam_index * 4), .oam_secondary.attribute(address: secondary_oam_index * 4))
-                        //.transparent_draws += 1
-                        //eprintln("T: {} S: {}", .transparent_draws, .solid_draws)
-                    }
-
-                //}
+                    // Can we get away with escaping from the loop here?
+                    break;
+                }
             }
         }
 
@@ -976,6 +903,7 @@ class PPU {
 
             if ((scanline >= sprite_y) and (scanline <= (clamp_vertical_pixel + (sprite_height - 1)))) {
 
+                .oam_secondary.next_sprites.insert(before_index: 0, value: .oam.x_position(address: sprite * 4))
 
                 if .sprite_size_8x8 {
 
@@ -1005,8 +933,8 @@ class PPU {
                 //eprintln("Sprite data: {}, {}, {}, {}", .oam_secondary.y_position(address:sprite_count), .oam_secondary.tile_index(address:sprite_count), .oam_secondary.attribute(address:sprite_count), .oam_secondary.x_position(address:sprite_count))
                 sprite_count += 1
 
-                if sprite_count > 7 {
-                    eprintln("Sprite overflow: {}" sprite_count )
+                if sprite_count >= 8 {
+                    //eprintln("Sprite overflow: {}" sprite_count )
                     // TODO: properly implement the sprite overflow bug
                     .sprite_overflow = true                    
                     break
@@ -1014,89 +942,6 @@ class PPU {
             }
 
             }
-
-                // let sprite_attr = .oam.attribute(address: sprite_addr)
-                // let sprite_number = .oam.tile_index(address: sprite_addr) // FIXME: second read of tile index
-
-                // if .sprite_size_8x8 {
-                //     let vflip = (sprite_attr & 0x80) == 0x80
-                //     let tile_row = match vflip {
-                //         false => (scanline - sprite_y)
-                //         else => sprite_height - 1 - (scanline - sprite_y)
-                //     }
-                //     //let sprite_index = (tile_row & 0x7) | ((sprite_x & 0xf) << 4) | ((sprite_y & 0xf) << 8)
-                //     // let sprite_index = .oam.tile_index(address: sprite_addr) as! u16 * 0x10 + tile_row as! u16 //FIXME: third read of tile index
-                //     // let first_plane = .chr_rom_byte_at(sprite_table, sprite_index)
-                //     // let second_plane = .chr_rom_byte_at(sprite_table, sprite_index + 8)
-
-                //     // mut mask = [0u8; 8]
-                //     // for i in 0..8u8 {
-                //     //     mask[i] = ((first_plane >> i) & 0x1) | (((second_plane >> i & 0x1) << 1)) | ((sprite_attr & 0x3) << 2)
-                //     // }
-
-
-
-                //     // result.insert(before_index: 0, value: Sprite(
-                //     //     hflip: (sprite_attr & 0x40) == 0x40
-                //     //     mask: mask
-                //     //     bg_sprite: (sprite_attr & 0x20) == 0x20
-                //     //     sprite_x: sprite_x
-                //     //     sprite_zero: sprite == 0
-                //     // ))
-                //     sprite_count += 1
-                // } else {
-                //     // 8x16
-                //     let vflip = (sprite_attr & 0x80) == 0x80
-                //     mut tile_row = match vflip {
-                //         false => (scanline - sprite_y)
-                //         else => sprite_height - 1 - (scanline - sprite_y)
-                //     }
-                //     //let sprite_index = (tile_row & 0x7) | ((sprite_x & 0xf) << 4) | ((sprite_y & 0xf) << 8)
-                //     mut sprite_index = (sprite_number >> 1) as! u16 * 0x20 + tile_row as! u16
-                //     if tile_row > 7 {
-                //         // bottom half of the sprite
-                //         tile_row -= 8
-                //         sprite_index += 8
-                //     }
-                //     // let first_plane = .chr_rom_byte_at(sprite_table, sprite_index)
-                //     // let second_plane = .chr_rom_byte_at(sprite_table, sprite_index + 8)
-
-                //     // sprite tile: 2
-                //     // 0000 + offset
-                //     // scanline: sprite_y (tile_row)
-                //     // 0x20 + 0
-                //     // sprite_table[0x20 + 0]
-                //     // sprite_table[0x20 + 8]
-
-                //     // sprite_table[0x21 + 0]
-                //     // sprite_table[0x21 + 8]
-
-                //     // sprite_table[0x27 + 0]
-                //     // sprite_table[0x27 + 8]
-
-                //     // sprite_table[0x30 + 0]
-                //     // sprite_table[0x30 + 8]
-
-                //     // mut mask = [0u8; 8]
-                //     // for i in 0..8u8 {
-                //     //     mask[i] = ((first_plane >> i) & 0x1) | (((second_plane >> i & 0x1) << 1)) | ((sprite_attr & 0x3) << 2)
-                //     // }
-
-                //     .oam_secondary.set_y_position(address: sprite_count, value: sprite_y)
-                //     .oam_secondary.set_tile_index(address: sprite_count, value: .oam.tile_index(address: sprite_addr)) //FIXME: this discounts the sprite_index shenanigans above
-                //     .oam_secondary.set_attribute(address: sprite_count, value: sprite_attr)
-                //     .oam_secondary.set_x_position(address: sprite_count, value: sprite_x)  
-
-                //     // result.insert(before_index: 0, value: Sprite(
-                //     //     hflip: (sprite_attr & 0x40) == 0x40
-                //     //     mask: mask
-                //     //     bg_sprite: (sprite_attr & 0x20) == 0x20
-                //     //     sprite_x: sprite_x
-                //     //     sprite_zero: sprite == 0
-                //     // ))
-                //     sprite_count += 1
-            //     }
-            // }
         }
     }
 
@@ -1147,7 +992,14 @@ class PPU {
             bg_pixel_set = .render_bg_pixel()
         }
         //eprintln("Render sprite - sprites visible: {}, left mask: {}, h: {} v: {}", .sprites_visible, .left_sprite_mask, .horizontal_pixel, .vertical_pixel)
-        if .sprites_visible and (not .left_sprite_mask or .horizontal_pixel >= 8) {
+        if .sprites_visible and (not .left_sprite_mask or .horizontal_pixel >= 8) and (.horizontal_pixel as! u8 >= .oam_secondary.next_sprites.last().value_or(255u8)) {
+            let sprite_test = match (.oam_secondary.next_sprites.last().value_or(247u8) >= 247u8) {
+                true => 255u8
+                else => .oam_secondary.next_sprites.last().value_or(247u8) + 7
+            }
+            if .horizontal_pixel as! u8 >= sprite_test {
+                .oam_secondary.next_sprites.pop()
+            }
             .render_sprite_pixel(bg_set: bg_pixel_set)
         }
 
