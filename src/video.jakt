@@ -35,8 +35,11 @@ fn draw_frame(sdl: SDL, mut buffer: [u32], region: Region) throws {
     let text_rect = SDL_Rect(10, 400, 0, 0)
     
     sdl.blit_surface(source: sdl.outline_surface, srcrect: null(), dest: surface, destrect: &raw text_rect)
+    sdl.free_surface(surface:sdl.outline_surface)
     sdl.blit_surface(source: sdl.text_surface, srcrect: null(), dest: surface, destrect: &raw text_rect)
+    sdl.free_surface(surface:sdl.text_surface)
     sdl.update_window_surface()
+    sdl.free_surface(surface: source)
 
 }
 
