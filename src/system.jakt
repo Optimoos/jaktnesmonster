@@ -384,14 +384,21 @@ class System {
 
     public fn oam_dma(mut this, value: u8) {
         let address = 0x100u16 * (value as! u16)
-
-        for addr in address..(address + 256) {
-            .ppu.oam[addr - address] = .read_byte(address: addr)
+        //for addr in address..(address + 256) {
+        mut addr_mod = 0i16
+        for count in 0..256 {
+            //.ppu.oam[addr - address] = .read_byte(address: addr)
+            // FIXME: Can this be compacted to 4 reads per 1 send to the OAM?
+            let xfer_byte: u8 = .read_byte(address: (address as! i16 + addr_mod) as! u16)
+            .ppu.oam_data_write(value: xfer_byte)
+            addr_mod += 1
+            if ((address as! i16 + addr_mod) % 256i16 == 0) {
+                addr_mod - 0xFF
+            } 
         }
 
-        .ppu.oam_addr_write(value: 0x00)
-
-        // println("{}", .ppu.oam)
+        // TODO: DMA reset to 0x00 is suggested but should be handled by software, not the hardware, clean out this commented code
+        //.ppu.oam_addr_write(value: 0x00)
     }
 
     public fn debug_enable(mut this) {
