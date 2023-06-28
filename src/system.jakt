@@ -365,7 +365,7 @@ class System {
         } else if address < 0x4000 {
             .ppu.write_ppu_addr(address, value)
         } else if address == 0x4014 {
-            .oam_dma(value)
+            try .oam_dma(value)
             try {
                 .ppu.dma_tick()
             } catch {}
@@ -382,7 +382,7 @@ class System {
         }
     }
 
-    public fn oam_dma(mut this, value: u8) {
+    public fn oam_dma_depr(mut this, value: u8) {
         let address = 0x100u16 * (value as! u16)
         //for addr in address..(address + 256) {
         mut addr_mod = 0i16
@@ -396,9 +396,16 @@ class System {
                 addr_mod - 0xFF
             } 
         }
+    }
 
-        // TODO: DMA reset to 0x00 is suggested but should be handled by software, not the hardware, clean out this commented code
-        //.ppu.oam_addr_write(value: 0x00)
+    public fn oam_dma (mut this, value: u8) throws {
+        let address = 0x100u16 * (value as! u16)
+        
+        mut dma_array: [u8] = [0u8;256]
+        for count in 0..256u16 {
+            dma_array[count] = .scratch_ram[address + count & 0x7ff]
+        }
+        .ppu.oam.dma(new_data: dma_array)
     }
 
     public fn debug_enable(mut this) {

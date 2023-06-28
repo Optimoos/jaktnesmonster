@@ -11,34 +11,6 @@ class RGB {
     }
 }
 
-class Sprite {
-    public hflip: bool
-    public mask: [u8]
-    public bg_sprite: bool
-    public sprite_x: u8
-    public sprite_zero: bool
-
-    public fn get_sprite_pixel(this, x: u8) -> (bool, u8){
-        //TODO (?): How did the hardware handle this with 8 bits?
-        guard x >= .sprite_x and (x as! u16) < ((.sprite_x as! u16) + 8u16) else {
-            return(false, 0u8)
-        }
-
-        mut shift_amount = match .hflip {
-            true => (x - .sprite_x) as! i16
-            else => 7 - (x as! i16 - .sprite_x as! i16)
-        }
-
-        if (shift_amount < 0) {
-            shift_amount = 0
-        }
-
-        let entry = .mask[shift_amount as! u8]
-
-        return (true, entry)
-    }
-}
-
 class OAMMemory {
     m_y_position: [u8]
     m_tile_index: [u8]
@@ -75,48 +47,61 @@ class OAMMemory {
         }
     }
 
-    // These gets and sets may be unnecessary, if there's nothing complex about
-    // the interactions required to be kept in internal functions, make the 
-    // variables public
+    public fn dma(mut this, new_data: [u8]) {
+        for count in 0..64u8 {
+            .m_y_position[count] = new_data[count * 4]
+            .m_tile_index[count] = new_data[count * 4 + 1]
+            .m_attribute[count] = new_data[count * 4 + 2]
+            .m_x_position[count] = new_data[count * 4 + 3]
+        }
+    }
+
+    // TODO: These gets and sets may be unnecessary, if there's nothing complex 
+    // about the interactions required to be kept in internal functions, make 
+    // the variables public
 
     public fn y_position(this, address: u8) -> u8 {
-        return .m_y_position[address >> 2]
+        return .m_y_position[address]
     }
 
     public fn set_y_position(mut this, address: u8, value: u8) {
-        .m_y_position[address >> 2] = value
+        .m_y_position[address] = value
     }
 
     public fn tile_index(this, address: u8) -> u8 {
-        return .m_tile_index[address >> 2]
+        return .m_tile_index[address]
     }
 
     public fn set_tile_index(mut this, address: u8, value: u8) {
-        .m_tile_index[address >> 2] = value
+        .m_tile_index[address] = value
     }
 
     public fn attribute(this, address: u8) -> u8 {
-        return .m_attribute[address >> 2]
+        return .m_attribute[address]
     }
 
     public fn set_attribute(mut this, address: u8, value: u8) {
-        .m_attribute[address >> 2] = value
+        .m_attribute[address] = value
     }
 
     public fn x_position(this, address: u8) -> u8 {
-        return .m_x_position[address >> 2]
+        return .m_x_position[address]
     }
 
     public fn set_x_position(mut this, address: u8, value: u8) {
-        .m_x_position[address >> 2] = value
+        .m_x_position[address] = value
     }
 
     public fn v_flipped(this, address: u8) -> bool {
-        return (.m_attribute[address >> 2] & 0b10000000) == 0b10000000
+        return (.m_attribute[address] & 0b10000000) == 0b10000000
     }
 
     public fn h_flipped(this, address: u8) -> bool {
-        return (.m_attribute[address >> 2] & 0b01000000) == 0b01000000
+        return (.m_attribute[address] & 0b01000000) == 0b01000000
+    }
+
+    public fn address_to_index(address: u8) -> u8 {
+        return address >> 2
     }
 
 }
@@ -625,19 +610,19 @@ class PPU {
         //for sprite in .oam_secondary {
 
         for secondary_oam_index in (0u8..7u8).inclusive() {
-            let sprite_x = .oam_secondary.x_position(address: secondary_oam_index * 4u8)
+            let sprite_x = .oam_secondary.x_position(address: secondary_oam_index)
 
             mut clamp_horizontal_pixel: u8 = sprite_x
             if clamp_horizontal_pixel > 247 {
                 clamp_horizontal_pixel = 247
             }
             if (horizontal_pixel >= sprite_x) and (horizontal_pixel <= (clamp_horizontal_pixel + 7)) {
-                let sprite_y = .oam_secondary.y_position(address: secondary_oam_index * 4u8)
+                let sprite_y = .oam_secondary.y_position(address: secondary_oam_index)
                 if (sprite_y > 240) {
                     continue
                 }
-                let sprite_tile_index = .oam_secondary.tile_index(address: secondary_oam_index * 4u8)
-                let sprite_attribute = .oam_secondary.attribute(address: secondary_oam_index * 4u8)
+                let sprite_tile_index = .oam_secondary.tile_index(address: secondary_oam_index)
+                let sprite_attribute = .oam_secondary.attribute(address: secondary_oam_index)
                 // Sprite can only be output if BG pixel is zero (bg_set==false) or the sprite has foreground priority (5th bit in attributes == 0)
                 // However, we cannot filter this early as it will prevent the current sprite 0 mechanism from functioning
 
@@ -668,7 +653,7 @@ class PPU {
                 // Y difference makes sure we get the correct y bytes for the character, need to handle y flip
 
                 // Figure out the bit we care about in the chr rom
-                let sprite_index:u16 = match .oam_secondary.v_flipped(address: secondary_oam_index * 4) {
+                let sprite_index:u16 = match .oam_secondary.v_flipped(address: secondary_oam_index) {
                     true => (sprite_tile_index << 4  | 7 - (y_difference)) as! u16
                     else => (sprite_tile_index << 4  | (y_difference)) as! u16
                 }
@@ -687,7 +672,7 @@ class PPU {
                 // |++--- Palette number from attribute table or OAM
                 // +----- Background/Sprite select
 
-                mut shift_amount = match .oam_secondary.h_flipped(address: secondary_oam_index * 4) {
+                mut shift_amount = match .oam_secondary.h_flipped(address: secondary_oam_index) {
                     true => (x_difference)
                     else => 7 - (x_difference)
                 }
@@ -874,10 +859,10 @@ class PPU {
 
         // Reset secondary oam
         for secondary_oam_index in (0u8..7u8).inclusive() {
-            .oam_secondary.set_attribute(address: secondary_oam_index * 4, value: 0xFF)
-            .oam_secondary.set_y_position(address: secondary_oam_index * 4, value: 0xFF)
-            .oam_secondary.set_x_position(address: secondary_oam_index * 4, value: 0xFF)
-            .oam_secondary.set_tile_index(address: secondary_oam_index * 4, value: 0xFF)
+            .oam_secondary.set_attribute(address: secondary_oam_index, value: 0xFF)
+            .oam_secondary.set_y_position(address: secondary_oam_index, value: 0xFF)
+            .oam_secondary.set_x_position(address: secondary_oam_index, value: 0xFF)
+            .oam_secondary.set_tile_index(address: secondary_oam_index, value: 0xFF)
         }
 
         for sprite in (0u8..63u8).inclusive() {
@@ -888,7 +873,7 @@ class PPU {
             // }
 
 
-            let sprite_y = .oam.y_position(address: sprite * 4) + 1
+            let sprite_y = .oam.y_position(address: sprite) + 1
             //eprintln("Sprite index: {}, x: {}, y: {}, scanline: {}", sprite, .oam.x_position(address: sprite * 4), .oam.y_position(address: sprite * 4), scanline)
 
             // If Y coordinate is in range, copy to next open slot in secondary OAM unless 8 have already been found
@@ -903,14 +888,14 @@ class PPU {
 
             if ((scanline >= sprite_y) and (scanline <= (clamp_vertical_pixel + (sprite_height - 1)))) {
 
-                .oam_secondary.next_sprites.insert(before_index: 0, value: .oam.x_position(address: sprite * 4))
+                .oam_secondary.next_sprites.insert(before_index: 0, value: .oam.x_position(address: sprite))
 
                 if .sprite_size_8x8 {
 
-                    .oam_secondary.set_y_position(address: sprite_count * 4, value: (.oam.y_position(address: sprite * 4)) + 1) //TODO: nesdev docs suggest subtracting 1 here, if we do that we're in the wrong place, may merit investigation
-                    .oam_secondary.set_tile_index(address: sprite_count * 4, value: .oam.tile_index(address: sprite * 4)) 
-                    .oam_secondary.set_attribute(address: sprite_count * 4, value: .oam.attribute(address: sprite * 4))
-                    .oam_secondary.set_x_position(address: sprite_count * 4, value: .oam.x_position(address: sprite * 4))
+                    .oam_secondary.set_y_position(address: sprite_count, value: (.oam.y_position(address: sprite)) + 1) //TODO: nesdev docs suggest subtracting 1 here, if we do that we're in the wrong place, may merit investigation
+                    .oam_secondary.set_tile_index(address: sprite_count, value: .oam.tile_index(address: sprite)) 
+                    .oam_secondary.set_attribute(address: sprite_count, value: .oam.attribute(address: sprite))
+                    .oam_secondary.set_x_position(address: sprite_count, value: .oam.x_position(address: sprite))
                     //eprintln("Adding sprite, x: {}, y: {}, tile: {}, attr: {:08b}, scanline: {}, count: {}", .oam.x_position(address: sprite * 4), .oam.y_position(address: sprite * 4), .oam.tile_index(address: sprite * 4), .oam.attribute(address: sprite * 4), scanline, sprite_count)
                     if (sprite == 0) {
                         .oam_secondary.m_sprite_zero[sprite] = true
@@ -1394,6 +1379,10 @@ class PPU {
 
     fn color_palette_to_rgb(mut this, anon value: u8) -> u32 {
         return .color_palette[value & 0x3f]
+    }
+
+    public fn nonstandard_oam_addr_read(this) -> u8 {
+        return .oam_addr
     }
 
 }
