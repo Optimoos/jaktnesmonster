@@ -106,6 +106,198 @@ class OAMMemory {
 
 }
 
+enum NTMirror {
+    Horizontal
+    Vertical
+    OneScreenLower
+    OneScreenUpper
+}
+
+class Nametable {
+    m_nametable_1: [u8]
+    m_nametable_2: [u8]
+    m_mirror: NTMirror
+
+
+    public fn init() throws -> Nametable {
+        return Nametable(m_nametable_1: [0;1024], m_nametable_2: [0;1024], m_mirror: NTMirror::Horizontal)
+    }
+
+
+    public fn set_mirroring(mut this, anon mirroring: NTMirror) {
+        match mirroring {
+            Horizontal => {
+                .m_mirror = NTMirror::Horizontal
+                // .nametables[0] = 0
+                // .nametables[1] = 0
+                // .nametables[2] = 1
+                // .nametables[3] = 1
+            }
+            Vertical => {
+                .m_mirror = NTMirror::Vertical
+                // .nametables[0] = 0
+                // .nametables[1] = 1
+                // .nametables[2] = 0
+                // .nametables[3] = 1
+            }
+            OneScreenLower => {
+                .m_mirror = NTMirror::OneScreenLower
+                // .nametables[0] = 0
+                // .nametables[1] = 0
+                // .nametables[2] = 0
+                // .nametables[3] = 0
+            }
+            OneScreenUpper => {
+                .m_mirror = NTMirror::OneScreenUpper
+                // .nametables[0] = 1
+                // .nametables[1] = 1
+                // .nametables[2] = 1
+                // .nametables[3] = 1
+            }
+        }
+    }
+
+    public fn read(this, anon address: u16) -> u8 {
+        match .m_mirror {
+            NTMirror::Horizontal => {
+                match address & 0xfff {
+                    0x000 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }
+                    0x400 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8 
+                    }
+                    0x800 => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                    else => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                }
+            }
+            NTMirror::Vertical => {
+                match address & 0xfff {
+                    0x000 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }
+                    0x400 => {
+                        return .m_nametable_2[address & ~0xfff]  as! u8
+                    }
+                    0x800 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }
+                    else => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                }
+            }
+            NTMirror::OneScreenLower => {
+                match address & 0xfff {
+                    0x000 => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                    0x400 => {
+                        return .m_nametable_2[address & ~0xfff]  as! u8
+                    }
+                    0x800 => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                    else => {
+                        return .m_nametable_2[address & ~0xfff] as! u8
+                    }
+                }
+            }
+            NTMirror::OneScreenUpper => {
+                match address & 0xfff {
+                    0x000 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }
+                    0x400 => {
+                        return .m_nametable_1[address & ~0xfff]  as! u8
+                    }
+                    0x800 => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }
+                    else => {
+                        return .m_nametable_1[address & ~0xfff] as! u8
+                    }                
+                }
+            }
+        }
+    }
+   
+
+    public fn write (mut this, address: u16, value: u8) {
+        match .m_mirror {
+            NTMirror::Horizontal => {
+                match (address & 0xfff) {
+                    0x000 => {
+                        .m_nametable_1[address & ~0xfff] = value
+                    }
+                    0x400 => {
+                        .m_nametable_1[address & ~0xfff] = value
+                    }
+                    0x800 => {
+                        .m_nametable_2[address & ~0xfff] = value
+                    }
+                    else => {
+                        .m_nametable_2[address & ~0xfff] = value
+                    }
+                }
+            }
+            NTMirror::Vertical => {
+                // match address & 0xfff {
+                //     0x000 => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }
+                //     0x400 => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                //     0x800 => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }
+                //     else => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                // }
+            }
+            NTMirror::OneScreenLower => {
+                // match address & 0xfff {
+                //     0x000 => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                //     0x400 => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                //     0x800 => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                //     else => {
+                //         .m_nametable_2[address & ~0xfff] = value
+                //     }
+                // }
+            }
+            NTMirror::OneScreenUpper => {
+                // match address & 0xfff {
+                //     0x000 => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }
+                //     0x400 => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }
+                //     0x800 => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }
+                //     else => {
+                //         .m_nametable_1[address & ~0xfff] = value
+                //     }                
+                // }
+            }
+        }
+    }
+
+}
+
 class PPU {
     // base_table_address: u16
     vram_address_increment: u16
@@ -118,6 +310,7 @@ class PPU {
     dont_vblank: bool
     public nametable_data: [[u8]]
     public nametables: [usize]
+    public nametable: Nametable
     public palette: [u8]
     // public vram_rw_addr: u16
     oam_addr: u8
@@ -185,6 +378,7 @@ class PPU {
             dont_vblank: false
             nametable_data: [[0x0; 0x400], [0x0; 0x400], [0x0; 0x400], [0x0; 0x400]]
             nametables: [0; 4]
+            nametable: Nametable::init()
             palette: [0x0; 32]
             oam_addr: 0x00
             // oam: [0xff; 256]
@@ -1245,11 +1439,14 @@ class PPU {
         }
         else if (address >= 0x2000) and (address <= 0x2fff) {
             .write_nametable(address, value)
+            .nametable.write(address: address, value: value)
         }
         else if (address >= 0x3000) and (address <= 0x3eff) {
             // eprintln("Mirror of PPU nametable not yet supported")
             // abort()  
             .write_nametable(address: address - 0x1000, value)
+            // TODO: second else if won't be required with new nametable structure
+            .nametable.write(address: address, value: value)
         }
         else if (address >= 0x3f00) and (address <= 0x3fff) {
             let sub_address = (address - 0x3f00) % 0x20
